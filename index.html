@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0b0b18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Nyx — Digital Pal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#2ee6c8; --teal-dim:#1a9e87; --purple:#9a6bff; --purple-deep:#5b3ea8;
+    --ink:#0b0b18; --panel:#14142a; --panel2:#1c1c38; --line:#2e2e55;
+    --txt:#d8f7ef; --warn:#ffd166; --bad:#ff5d7a; --good:#7dff9a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--txt);
+    font-family:'VT323',monospace; min-height:100%;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1d1440 0%, transparent 60%),
+      radial-gradient(900px 500px at 85% 110%, #07332c 0%, transparent 55%),
+      var(--ink);
+    display:flex; flex-direction:column; align-items:center;
+    padding:14px 12px 30px; overflow-x:hidden;
+  }
+  /* CRT scanline overlay */
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+  header{width:100%; max-width:460px; display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;}
+  h1{font-family:'Press Start 2P',monospace; font-size:20px; margin:0; color:var(--teal);
+     text-shadow:0 0 12px rgba(46,230,200,.55), 2px 2px 0 var(--purple-deep); letter-spacing:1px;}
+  h1 .dot{color:var(--purple);}
+  #clock{font-size:18px; color:#8f8fc0;}
+  .stage-wrap{width:100%; max-width:460px;}
+  #stage{
+    position:relative; width:100%; aspect-ratio:1/1.02; border:3px solid var(--line);
+    border-radius:14px; overflow:hidden; cursor:pointer;
+    background:
+      linear-gradient(180deg,#191938 0%, #101024 62%, #0c0c1e 100%);
+    box-shadow:0 0 0 3px #06060f, 0 18px 40px rgba(0,0,0,.55), inset 0 0 60px rgba(90,60,200,.12);
+    touch-action:manipulation; user-select:none;
+  }
+  #stage.night{background:linear-gradient(180deg,#070716 0%, #05050f 70%, #04040a 100%);}
+  #stage.sleeping{filter:brightness(.72) saturate(.8);}
+  /* pixel floor grid */
+  #floor{position:absolute; left:0; right:0; bottom:0; height:26%;
+    background:
+      repeating-linear-gradient(90deg, rgba(46,230,200,.10) 0 2px, transparent 2px 34px),
+      repeating-linear-gradient(0deg, rgba(46,230,200,.10) 0 2px, transparent 2px 22px),
+      linear-gradient(180deg, rgba(46,230,200,.05), rgba(154,107,255,.08));
+    border-top:2px solid rgba(46,230,200,.25);
+    transform:perspective(300px) rotateX(24deg); transform-origin:bottom;
+  }
+  #stars{position:absolute; inset:0; pointer-events:none;}
+  #nyxCanvas{position:absolute; left:50%; bottom:15%; transform:translateX(-50%);
+    image-rendering:pixelated; image-rendering:crisp-edges; z-index:5;}
+  .floaty{position:absolute; z-index:6; pointer-events:none; font-family:'Press Start 2P',monospace;
+    animation:rise 1.6s ease-out forwards;}
+  @keyframes rise{0%{opacity:0; transform:translateY(6px) scale(.7);} 18%{opacity:1;}
+    100%{opacity:0; transform:translateY(-64px) scale(1.1);}}
+  .zzz{color:#9db4ff; font-size:15px;}
+  .heart{color:var(--bad); font-size:14px;}
+  .sweat{color:#7ad7ff; font-size:13px;}
+  .note{color:var(--warn); font-size:13px;}
+  #bubble{
+    position:absolute; z-index:8; left:50%; top:12px; transform:translateX(-50%);
+    max-width:86%; background:#f4f1de; color:#22223a; border:3px solid #22223a; border-radius:10px;
+    padding:8px 12px 6px; font-size:21px; line-height:1.05; text-align:center;
+    box-shadow:4px 4px 0 rgba(0,0,0,.45); opacity:0; transition:opacity .18s ease;
+  }
+  #bubble.show{opacity:1;}
+  #bubble::after{content:""; position:absolute; left:50%; bottom:-12px; transform:translateX(-50%);
+    border:6px solid transparent; border-top:8px solid #22223a;}
+  #moodTag{
+    position:absolute; z-index:7; left:10px; top:10px; font-family:'Press Start 2P',monospace;
+    font-size:9px; color:var(--ink); background:var(--teal); padding:5px 7px 4px; border-radius:5px;
+    box-shadow:2px 2px 0 rgba(0,0,0,.5); text-transform:uppercase;
+  }
+  #moodTag.warn{background:var(--warn);} #moodTag.bad{background:var(--bad); color:#fff;}
+  #playLayer{position:absolute; inset:0; z-index:9; display:none;}
+  #playLayer.on{display:block;}
+  .bit{position:absolute; width:26px; height:26px; image-rendering:pixelated; cursor:pointer;}
+  .panel{width:100%; max-width:460px; background:var(--panel); border:3px solid var(--line);
+    border-radius:12px; padding:12px; margin-top:12px; box-shadow:0 10px 24px rgba(0,0,0,.4);}
+  .bars{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}
+  .bar label{font-family:'Press Start 2P',monospace; font-size:8px; color:#9d9dd0; display:block; margin-bottom:5px;}
+  .track{height:14px; background:#0a0a1a; border:2px solid var(--line); border-radius:4px; overflow:hidden;}
+  .fill{height:100%; width:50%; transition:width .5s ease;}
+  #hungerFill{background:linear-gradient(90deg,#ff9f43,#ffd166);}
+  #energyFill{background:linear-gradient(90deg,#3aa0ff,#7ad7ff);}
+  #bondFill{background:linear-gradient(90deg,#c95bff,#ff5d7a);}
+  .actions{display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-top:12px;}
+  button{
+    font-family:'Press Start 2P',monospace; font-size:10px; color:var(--ink);
+    background:var(--teal); border:0; border-radius:9px; padding:13px 4px 11px; cursor:pointer;
+    box-shadow:0 4px 0 var(--teal-dim); transition:transform .05s ease, box-shadow .05s ease;
+  }
+  button:active{transform:translateY(3px); box-shadow:0 1px 0 var(--teal-dim);}
+  button.alt{background:var(--purple); color:#fff; box-shadow:0 4px 0 var(--purple-deep);}
+  button.alt:active{box-shadow:0 1px 0 var(--purple-deep);}
+  button.ghost{background:var(--panel2); color:var(--txt); box-shadow:0 4px 0 #0a0a18; border:2px solid var(--line);}
+  button:disabled{opacity:.45; cursor:default;}
+  #foodRow{display:none; grid-template-columns:repeat(3,1fr); gap:9px; margin-top:9px;}
+  #foodRow.on{display:grid;}
+  #foodRow button{background:#ffd166; box-shadow:0 4px 0 #c79a2e; font-size:9px;}
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:2px;}
+  .chip{font-size:17px; padding:3px 9px 1px; border:2px solid var(--line); border-radius:20px;
+    background:var(--panel2); color:#a9a9d6;}
+  .chip b{color:var(--txt); font-weight:normal;}
+  .chip.live{border-color:var(--teal-dim); color:var(--teal);}
+  .rowBtns{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:11px;}
+  #log{max-height:118px; overflow-y:auto; font-size:18px; line-height:1.15; color:#a9c9c0;}
+  #log div{padding:2px 0; border-bottom:1px dashed rgba(255,255,255,.06);}
+  #log .t{color:#5f5f8f; margin-right:6px;}
+  .tiny{font-size:16px; color:#77779f; text-align:center; margin-top:10px; line-height:1.2;}
+  #hatch{position:fixed; inset:0; z-index:60; background:rgba(5,5,14,.93);
+    display:none; align-items:center; justify-content:center; padding:20px;}
+  #hatch.on{display:flex;}
+  #hatchCard{max-width:400px; width:100%; background:var(--panel); border:3px solid var(--teal-dim);
+    border-radius:14px; padding:22px 18px; text-align:center;}
+  #hatchCard h2{font-family:'Press Start 2P',monospace; font-size:15px; color:var(--teal); margin:4px 0 12px;}
+  #hatchCard p{font-size:20px; line-height:1.25; margin:8px 0 16px;}
+  #hatchCard button{width:100%;}
+  @media (max-width:380px){ h1{font-size:16px;} #bubble{font-size:19px;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>NYX<span class="dot">.</span>PAL</h1>
+  <div id="clock">--:--</div>
+</header>
+
+<div class="stage-wrap">
+  <div id="stage" title="Tap to pet Nyx">
+    <div id="stars"></div>
+    <div id="floor"></div>
+    <div id="moodTag">content</div>
+    <div id="bubble"></div>
+    <canvas id="nyxCanvas" width="288" height="252"></canvas>
+    <div id="playLayer"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="bars">
+    <div class="bar"><label>HUNGER</label><div class="track"><div class="fill" id="hungerFill"></div></div></div>
+    <div class="bar"><label>ENERGY</label><div class="track"><div class="fill" id="energyFill"></div></div></div>
+    <div class="bar"><label>BOND</label><div class="track"><div class="fill" id="bondFill"></div></div></div>
+  </div>
+  <div class="actions">
+    <button id="feedBtn">FEED</button>
+    <button id="playBtn" class="alt">PLAY</button>
+    <button id="sleepBtn" class="alt">NAP</button>
+    <button id="callBtn" class="ghost">CALL</button>
+  </div>
+  <div id="foodRow">
+    <button data-food="berry">PIXEL BERRY</button>
+    <button data-food="burger">BYTE BURGER</button>
+    <button data-food="candy">GLITCH CANDY</button>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="chips">
+    <span class="chip" id="chipMood">mood <b>content</b></span>
+    <span class="chip" id="chipTrait">trait <b>?</b></span>
+    <span class="chip" id="chipNoise">ears <b>off</b></span>
+    <span class="chip" id="chipShake">shake <b>off</b></span>
+    <span class="chip" id="chipWx">weather <b>…</b></span>
+    <span class="chip" id="chipAge">age <b>0m</b></span>
+  </div>
+  <div class="rowBtns">
+    <button id="earsBtn" class="ghost">ENABLE EARS</button>
+    <button id="motionBtn" class="ghost">ENABLE SHAKE</button>
+  </div>
+</div>
+
+<div class="panel">
+  <div id="log"></div>
+  <div class="tiny">Nyx lives in this tab. Add to Home Screen to keep him on your phone.<br>
+  Ears = microphone noise level only — nothing is recorded or sent anywhere. Weather is Dundalk, MD.</div>
+</div>
+
+<div id="hatch">
+  <div id="hatchCard">
+    <h2>A PAL HATCHES</h2>
+    <p id="hatchText">Something small and pixelated crawls out of the static…</p>
+    <button id="hatchBtn">SAY HI</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   NYX — a digital pal. Single-file virtual pet.
+   Stats decay in real time and persist in localStorage.
+   Sensors: microphone loudness (anxious), device shake (dizzy),
+   Open-Meteo weather for Dundalk MD (cold -> shivering).
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const stage = $("stage"), canvas = $("nyxCanvas"), ctx = canvas.getContext("2d");
+const SAVE_KEY = "nyx-save-v1";
+
+/* ---------- sprite: 18 x 16 grid, drawn big and chunky ---------- */
+/* palette keys */
+const PAL = {
+  ".":null,
+  "T":"#2ee6c8",  /* teal body        */
+  "t":"#1fbfa5",  /* teal shade       */
+  "P":"#9a6bff",  /* purple accents   */
+  "p":"#6d43c9",  /* purple deep      */
+  "H":"#c9b8ff",  /* horn lavender    */
+  "B":"#10101f",  /* near-black       */
+  "W":"#f4fffb",  /* eye white        */
+  "R":"#ff5d7a",  /* blush / mouth    */
+  "G":"#ffd166"   /* belly spark      */
+};
+/* body map: face area is rows 5-9, cols 4-13 — eyes/mouth drawn by mood */
+const BODY = [
+"..................",
+"....H........H....",
+"...HHH......HHH...",
+"...HHHH....HHHH...",
+"....TTTTTTTTTT....",
+"...TTTTTTTTTTTT...",
+"..TTTTTTTTTTTTTT..",
+"..PTTTTTTTTTTTTP..",
+"..PTTTTTTTTTTTTP..",
+"...TTTTTTTTTTTT...",
+"...TtTTTTTTTtT....",
+"....TTTTTTTTTT....",
+".....Tt....tT.....",
+"....TTT....TTT....",
+"...TTTT....TTTT...",
+"..PPPP......PPPP.."
+];
+const PX = 16; /* pixel size on canvas: canvas 288x252, sprite 18*16=288 wide */
+
+/* face drawing per mood: eyes as [col,row,w,h,colorKey] rects, mouth type */
+const FACES = {
+  content : {eyes:[[5,6,2,3],[11,6,2,3]], mouth:"smile"},
+  happy   : {eyes:[[5,6,2,2],[11,6,2,2]], mouth:"grin", blush:true},
+  love    : {eyes:[[5,6,2,3],[11,6,2,3]], mouth:"grin", blush:true, heartEyes:true},
+  hungry  : {eyes:[[5,6,2,2],[11,6,2,2]], mouth:"open"},
+  anxious : {eyes:[[5,5,2,4],[11,5,2,4]], mouth:"wavy"},
+  dizzy   : {eyes:[[5,6,3,3],[10,6,3,3]], mouth:"wavy", spiral:true},
+  sleepy  : {eyes:[[5,7,2,1],[11,7,2,1]], mouth:"yawn"},
+  cold    : {eyes:[[5,6,2,2],[11,6,2,2]], mouth:"chatter"},
+  hot     : {eyes:[[5,7,2,1],[11,7,2,1]], mouth:"open", sweat:true},
+  mad     : {eyes:[[5,6,2,2],[11,6,2,2]], mouth:"frown", brows:true}
+};
+
+/* ---------- state ---------- */
+const TRAITS = [
+  {id:"snackdriven", label:"snack-driven", hungerRate:1.5,  bondRate:1.0},
+  {id:"nightowl",    label:"night owl",    hungerRate:1.0,  bondRate:1.0},
+  {id:"gremlin",     label:"gremlin",      hungerRate:1.15, bondRate:1.25},
+  {id:"sleepyhead",  label:"sleepyhead",   hungerRate:0.9,  bondRate:1.0},
+  {id:"clingy",      label:"clingy",       hungerRate:1.0,  bondRate:1.6}
+];
+let S = null;
+function freshState(){
+  const trait = TRAITS[Math.floor(Math.random()*TRAITS.length)];
+  return {
+    born: Date.now(), lastSeen: Date.now(),
+    hunger: 78, energy: 82, bond: 5,
+    trait: trait.id,
+    mood: "content", moodUntil: 0,
+    sleeping: false, interacted: 0,
+    wxTempF: null, wxAt: 0
+  };
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return null;
+    const s = JSON.parse(raw);
+    if(!s || typeof s.hunger !== "number") return null;
+    return s;
+  }catch(e){ return null; }
+}
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function trait(){ return TRAITS.find(t=>t.id===S.trait) || TRAITS[0]; }
+
+/* real-time decay applied from elapsed wall-clock time, online and offline */
+function applyElapsed(){
+  const now = Date.now();
+  let mins = (now - S.lastSeen)/60000;
+  if(mins < 0) mins = 0;
+  if(mins > 60*24) mins = 60*24; /* cap offline decay at a day */
+  if(S.sleeping){
+    S.energy = clamp(S.energy + mins*3.5, 0, 100);
+    S.hunger = clamp(S.hunger - mins*0.05*trait().hungerRate, 0, 100);
+    if(S.energy >= 100){ S.sleeping = false; }
+  }else{
+    /* tuned so a full tank lasts roughly a day of real time */
+    S.hunger = clamp(S.hunger - mins*0.07*trait().hungerRate, 0, 100);
+    S.energy = clamp(S.energy - mins*0.055, 0, 100);
+  }
+  S.lastSeen = now;
+}
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* ---------- rendering ---------- */
+let blinkUntil = 0, nextBlink = Date.now()+1800, frame = 0;
+function drawSprite(){
+  const now = Date.now();
+  if(now > nextBlink){ blinkUntil = now+140; nextBlink = now + 1600 + Math.random()*2600; }
+  const blinking = now < blinkUntil && S.mood !== "dizzy";
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  /* mood-driven body offsets: bob, shiver, slump */
+  let ox = 0, oy = Math.round(Math.sin(now/620)*1.4);
+  if(S.mood === "cold"){ ox = (frame%2===0)? 2 : -2; }
+  if(S.mood === "anxious"){ ox = (frame%2===0)? 1 : -1; }
+  if(S.mood === "sleepy" || S.sleeping){ oy += 3; }
+  if(S.mood === "happy"){ oy -= Math.abs(Math.round(Math.sin(now/180)*3)); }
+
+  ctx.save();
+  ctx.translate(ox, oy*2);
+  /* body */
+  for(let r=0;r<BODY.length;r++){
+    const row = BODY[r];
+    for(let c=0;c<row.length;c++){
+      const k = row[c], col = PAL[k];
+      if(!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(c*PX, r*PX, PX, PX);
+    }
+  }
+  /* belly spark */
+  ctx.fillStyle = PAL.G;
+  ctx.fillRect(8*PX, 10*PX, PX, PX); ctx.fillRect(9*PX, 10*PX, PX, PX);
+  /* tail (right side, wags when happy) */
+  const wag = S.mood==="happy" ? (frame%2===0?0:1) : 0;
+  ctx.fillStyle = PAL.P;
+  ctx.fillRect(15*PX, (11-wag)*PX, PX, PX);
+  ctx.fillRect(16*PX, (10-wag)*PX, PX, PX);
+  ctx.fillStyle = PAL.H;
+  ctx.fillRect(16*PX, (9-wag)*PX, PX, PX);
+
+  /* face */
+  const face = FACES[S.mood] || FACES.content;
+  const eyes = blinking && !face.spiral ? [[5,7,2,1],[11,7,2,1]] : face.eyes;
+  for(const [c,r,w,h] of eyes){
+    if(face.heartEyes){
+      ctx.fillStyle = PAL.R;
+      ctx.fillRect(c*PX, r*PX, w*PX, PX);
+      ctx.fillRect((c)*PX, (r+1)*PX, w*PX, PX);
+      ctx.fillRect((c+ (w===2?0:0))*PX, (r+2)*PX, PX, PX);
+      ctx.fillRect((c+1)*PX, (r+2)*PX, PX, PX);
+    } else if(face.spiral){
+      ctx.fillStyle = PAL.B;
+      ctx.fillRect(c*PX, r*PX, w*PX, h*PX);
+      ctx.fillStyle = PAL.W;
+      ctx.fillRect((c+1)*PX, (r+1)*PX, PX, PX);
+    } else {
+      ctx.fillStyle = PAL.B;
+      ctx.fillRect(c*PX, r*PX, w*PX, h*PX);
+      ctx.fillStyle = PAL.W;
+      ctx.fillRect(c*PX, r*PX, PX, PX); /* sparkle */
+    }
+  }
+  if(face.brows){
+    ctx.fillStyle = PAL.B;
+    ctx.fillRect(4*PX, 5*PX, 3*PX, PX); ctx.fillRect(11*PX, 5*PX, 3*PX, PX);
+  }
+  if(face.blush){
+    ctx.fillStyle = "rgba(255,93,122,.75)";
+    ctx.fillRect(3*PX, 8*PX, 2*PX, PX); ctx.fillRect(13*PX, 8*PX, 2*PX, PX);
+  }
+  /* mouths around col 8-9, row 8 */
+  ctx.fillStyle = PAL.B;
+  if(face.mouth === "smile"){ ctx.fillRect(8*PX,8*PX,PX,PX); ctx.fillRect(9*PX,8*PX,PX,PX); }
+  if(face.mouth === "grin"){ ctx.fillRect(7*PX,8*PX,4*PX,PX); ctx.fillRect(8*PX,9*PX,2*PX,PX); }
+  if(face.mouth === "open"){ ctx.fillRect(8*PX,8*PX,2*PX,2*PX); }
+  if(face.mouth === "yawn"){ ctx.fillStyle = PAL.R; ctx.fillRect(8*PX,8*PX,2*PX,2*PX); }
+  if(face.mouth === "frown"){ ctx.fillRect(8*PX,9*PX,2*PX,PX); ctx.fillRect(7*PX,8*PX,PX,PX); ctx.fillRect(10*PX,8*PX,PX,PX); }
+  if(face.mouth === "wavy"){
+    ctx.fillRect(7*PX,8*PX,PX,PX); ctx.fillRect(8*PX,9*PX,PX,PX);
+    ctx.fillRect(9*PX,8*PX,PX,PX); ctx.fillRect(10*PX,9*PX,PX,PX);
+  }
+  if(face.mouth === "chatter"){
+    ctx.fillStyle = PAL.W;
+    ctx.fillRect(7*PX,8*PX,PX,PX); ctx.fillRect(9*PX,8*PX,PX,PX);
+    ctx.fillRect(8*PX,9*PX,PX,PX); ctx.fillRect(10*PX,9*PX,PX,PX);
+  }
+  ctx.restore();
+
+  /* sleeping Zzz */
+  if(S.sleeping || S.mood === "sleepy"){
+    if(frame%40===0) spawnFloaty("Z", "zzz", 62+Math.random()*14);
+  }
+  if(face.sweat && frame%26===0) spawnFloaty("~", "sweat", 18);
+}
+
+function spawnFloaty(text, cls, leftPct){
+  const el = document.createElement("div");
+  el.className = "floaty " + cls;
+  el.textContent = text;
+  el.style.left = leftPct + "%";
+  el.style.bottom = "52%";
+  stage.appendChild(el);
+  setTimeout(()=>el.remove(), 1650);
+}
+
+/* twinkling backdrop stars */
+(function makeStars(){
+  const box = $("stars");
+  for(let i=0;i<34;i++){
+    const s = document.createElement("div");
+    const sz = Math.random()<.85?2:3;
+    s.style.cssText = "position:absolute;width:"+sz+"px;height:"+sz+"px;background:#cfd8ff;opacity:"+
+      (0.25+Math.random()*0.6)+";left:"+(Math.random()*98)+"%;top:"+(Math.random()*62)+"%;";
+    box.appendChild(s);
+  }
+})();
+
+/* ---------- speech ---------- */
+const LINES = {
+  greet_morning:["*yawn* …oh. you're up. hi.","morning protocol: snacks first, talk later.","i dreamed in 16 colors last night."],
+  greet_day:["there you are. i counted ceiling pixels while you were gone.","hi hi hi. okay. i'm calm.","you came back. good. i like when you come back."],
+  greet_long:["YOU WERE GONE FOREVER. i almost became furniture.","i missed you in a totally normal, non-clingy way.","*stares* …never leave for that long again."],
+  content:["hum hum hum… that's my loading song.","i am 40% horns, 60% opinions.","everything is fine in pixel land."],
+  happy:["!! that. do that again.","i am powered by attention and crumbs.","best day. no notes."],
+  love:["…okay that's my favorite spot. you knew that.","<3 <3 <3","i would share my last berry with you. maybe."],
+  hungry:["my stomach just rendered a loading spinner.","feed me and i become 30% less feral.","i can hear snacks from here. that's my power."],
+  anxious:["too loud!! my pixels are vibrating apart.","can we… go somewhere quieter? please?","the world is at max volume and i am not."],
+  dizzy:["the room is doing parkour. make it stop.","you shook me like a snow globe. rude. effective, but rude.","i see three of you. all handsome. all blurry."],
+  sleepy:["my eyelids weigh one thousand pixels each.","five more minutes… of being awake. then nap.","i am not tired. *falls asleep standing*"],
+  cold:["m-my pixels are f-frozen together.","weather report: bad. terrible. hold me.","i was not built for this temperature. or any temperature."],
+  hot:["melting. tell my story.","i am a puddle with ambitions.","too warm. pixels expanding. send ice."],
+  mad:["hmph. >:(","i am small but my grudge is rendered in 4K.","apology snacks will be considered."],
+  fed:["*cronch* …acceptance. i accept this offering.","that hit the empty pixel in my chest.","food: acquired. mood: repaired."],
+  play:["catch mode: ON. try to keep up.","i am faster than i look. i look slow. still.","again! again! my tail is wagging on its own!"],
+  wake:["i have returned from the rectangle dimension.","nap complete. i am 200% more powerful.","did i miss anything? did snacks happen?"]
+};
+function say(kind){
+  const arr = LINES[kind] || LINES.content;
+  const text = arr[Math.floor(Math.random()*arr.length)];
+  const b = $("bubble");
+  b.textContent = text;
+  b.classList.add("show");
+  clearTimeout(say._t);
+  say._t = setTimeout(()=>b.classList.remove("show"), 3400);
+  log(text, "nyx");
+}
+
+/* ---------- log ---------- */
+function log(text, who){
+  const box = $("log");
+  const d = document.createElement("div");
+  const time = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+  d.innerHTML = '<span class="t">'+time+'</span>';
+  d.appendChild(document.createTextNode((who==="you" ? "you: " : "nyx: ") + text));
+  box.prepend(d);
+  while(box.children.length > 24) box.removeChild(box.lastChild);
+}
+
+/* ---------- mood engine ---------- */
+let loudUntil = 0, dizzyUntil = 0, forcedMood = null, forcedUntil = 0;
+function computeMood(){
+  const now = Date.now();
+  if(S.sleeping) return "sleepy";
+  if(now < dizzyUntil) return "dizzy";
+  if(forcedMood && now < forcedUntil) return forcedMood;
+  if(now < loudUntil) return "anxious";
+  if(S.wxTempF !== null && S.wxTempF <= 40) return "cold";
+  if(S.wxTempF !== null && S.wxTempF >= 92) return "hot";
+  if(S.hunger <= 22) return "hungry";
+  if(S.energy <= 16) return "sleepy";
+  const hr = new Date().getHours();
+  if(trait().id === "nightowl" && hr >= 1 && hr < 5 && S.energy < 55) return "content";
+  if(hr >= 23 || hr < 5){ if(S.energy < 45) return "sleepy"; }
+  return "content";
+}
+function setMood(m, seconds){
+  forcedMood = m; forcedUntil = Date.now() + seconds*1000;
+  refresh();
+}
+
+/* ---------- UI refresh ---------- */
+const MOOD_CLASS = {hungry:"warn", anxious:"warn", cold:"warn", hot:"warn",
+                    dizzy:"bad", mad:"bad", sleepy:"warn"};
+function refresh(){
+  $("hungerFill").style.width = S.hunger + "%";
+  $("energyFill").style.width = S.energy + "%";
+  $("bondFill").style.width = S.bond + "%";
+  const tag = $("moodTag");
+  tag.textContent = S.sleeping ? "napping" : S.mood;
+  tag.className = MOOD_CLASS[S.mood] || "";
+  tag.id = "moodTag";
+  $("chipMood").innerHTML = "mood <b>" + (S.sleeping ? "napping" : S.mood) + "</b>";
+  $("chipTrait").innerHTML = "trait <b>" + trait().label + "</b>";
+  const ageMin = Math.floor((Date.now()-S.born)/60000);
+  $("chipAge").innerHTML = "age <b>" + (ageMin < 60 ? ageMin+"m" :
+    ageMin < 1440 ? Math.floor(ageMin/60)+"h "+(ageMin%60)+"m" :
+    Math.floor(ageMin/1440)+"d "+Math.floor((ageMin%1440)/60)+"h") + "</b>";
+  stage.classList.toggle("sleeping", !!S.sleeping);
+  const hr = new Date().getHours();
+  stage.classList.toggle("night", hr >= 20 || hr < 6);
+  $("sleepBtn").textContent = S.sleeping ? "WAKE" : "NAP";
+  const c = new Date();
+  $("clock").textContent = c.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+}
+
+/* ---------- interactions ---------- */
+function bumpBond(n){ S.bond = clamp(S.bond + n*trait().bondRate, 0, 100); }
+stage.addEventListener("click", ()=>{
+  if(playing) return;
+  if(S.sleeping){ wakeUp(); return; }
+  S.interacted++;
+  bumpBond(1.2);
+  const love = Math.random() < 0.3;
+  setMood(love ? "love" : "happy", 4);
+  spawnFloaty("<3", "heart", 44+Math.random()*12);
+  say(love ? "love" : "happy");
+  save();
+});
+$("feedBtn").addEventListener("click", ()=>{
+  $("foodRow").classList.toggle("on");
+});
+const FOODS = {
+  berry : {hunger:14, energy:2,  line:"fed"},
+  burger: {hunger:30, energy:4,  line:"fed"},
+  candy : {hunger:8,  energy:12, line:"fed"}
+};
+$("foodRow").addEventListener("click", e=>{
+  const btn = e.target.closest("button[data-food]");
+  if(!btn) return;
+  const f = FOODS[btn.dataset.food];
+  if(S.sleeping) wakeUp(true);
+  S.hunger = clamp(S.hunger + f.hunger, 0, 100);
+  S.energy = clamp(S.energy + f.energy, 0, 100);
+  bumpBond(0.7);
+  setMood("happy", 4);
+  spawnFloaty("+", "note", 50);
+  say(f.line);
+  log("fed Nyx a " + btn.dataset.food, "you");
+  $("foodRow").classList.remove("on");
+  save();
+});
+$("callBtn").addEventListener("click", ()=>{
+  if(S.sleeping){ wakeUp(); return; }
+  setMood("happy", 3);
+  say(Math.random()<.5 ? "greet_day" : "content");
+});
+$("sleepBtn").addEventListener("click", ()=>{
+  if(S.sleeping){ wakeUp(); }
+  else{
+    S.sleeping = true;
+    log("Nyx curled up for a nap", "you");
+    refresh();
+    save();
+  }
+});
+function wakeUp(silent){
+  S.sleeping = false;
+  setMood("happy", 3);
+  if(!silent) say("wake");
+  refresh();
+  save();
+}
+
+/* ---------- play: Catch the Bit (20 seconds) ---------- */
+let playing = false, playScore = 0, playEndsAt = 0, bitTimer = null;
+$("playBtn").addEventListener("click", ()=>{
+  if(playing) return;
+  if(S.sleeping) wakeUp(true);
+  if(S.energy < 8){ setMood("sleepy",4); say("sleepy"); return; }
+  playing = true; playScore = 0;
+  playEndsAt = Date.now() + 20000;
+  $("playLayer").classList.add("on");
+  $("playBtn").disabled = true;
+  say("play");
+  log("started Catch the Bit", "you");
+  spawnBit();
+  bitTimer = setInterval(()=>{
+    if(Date.now() > playEndsAt) endPlay();
+  }, 250);
+});
+function spawnBit(){
+  if(!playing) return;
+  const layer = $("playLayer");
+  const bit = document.createElement("canvas");
+  bit.className = "bit"; bit.width = 26; bit.height = 26;
+  const bctx = bit.getContext("2d");
+  bctx.fillStyle = "#ffd166";
+  bctx.fillRect(8,2,10,10); bctx.fillRect(2,8,22,10); bctx.fillRect(8,14,10,10);
+  bctx.fillStyle = "#10101f"; bctx.fillRect(11,9,4,4);
+  bit.style.left = (6 + Math.random()*82) + "%";
+  bit.style.top = (10 + Math.random()*66) + "%";
+  bit.addEventListener("click", ev=>{
+    ev.stopPropagation();
+    playScore++;
+    spawnFloaty("+1", "note", parseFloat(bit.style.left));
+    bit.remove();
+    spawnBit();
+  });
+  layer.appendChild(bit);
+  setTimeout(()=>{ if(bit.parentNode){ bit.remove(); if(playing) spawnBit(); } }, 1400);
+}
+function endPlay(){
+  playing = false;
+  clearInterval(bitTimer);
+  $("playLayer").classList.remove("on");
+  $("playLayer").innerHTML = "";
+  $("playBtn").disabled = false;
+  S.energy = clamp(S.energy - 9, 0, 100);
+  S.hunger = clamp(S.hunger - 4, 0, 100);
+  bumpBond(2 + playScore*0.15);
+  setMood(playScore >= 8 ? "happy" : "content", 5);
+  log("Catch the Bit: caught " + playScore, "nyx");
+  say(playScore >= 8 ? "happy" : "content");
+  save();
+}
+
+/* ---------- ears: microphone loudness -> anxious ---------- */
+let earsOn = false, audioCtx = null, loudStreak = 0;
+$("earsBtn").addEventListener("click", async ()=>{
+  if(earsOn) return;
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    earsOn = true;
+    $("chipNoise").innerHTML = "ears <b>listening</b>";
+    $("chipNoise").classList.add("live");
+    $("earsBtn").textContent = "EARS ON";
+    $("earsBtn").disabled = true;
+    log("Nyx can hear the room now (level only, no recording)", "you");
+    (function listen(){
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum += v*v; }
+      const rms = Math.sqrt(sum/data.length);
+      if(rms > 0.16){ /* loud */
+        loudStreak++;
+        if(loudStreak >= 5 && !S.sleeping){
+          const wasAnxious = Date.now() < loudUntil;
+          loudUntil = Date.now() + 6000;
+          if(!wasAnxious){ say("anxious"); log("the room got loud — Nyx is anxious", "nyx"); }
+          loudStreak = 0;
+        }
+      } else loudStreak = Math.max(0, loudStreak-1);
+      requestAnimationFrame(listen);
+    })();
+  }catch(e){
+    $("chipNoise").innerHTML = "ears <b>denied</b>";
+    log("microphone permission was not granted", "you");
+  }
+});
+
+/* ---------- shake: devicemotion -> dizzy ---------- */
+let lastAccel = 0, lastShakeAt = 0;
+function onMotion(e){
+  const a = e.accelerationIncludingGravity;
+  if(!a) return;
+  const mag = Math.abs(a.x||0) + Math.abs(a.y||0) + Math.abs(a.z||0);
+  const delta = Math.abs(mag - lastAccel);
+  lastAccel = mag;
+  const now = Date.now();
+  if(delta > 22 && now - lastShakeAt > 2500){
+    lastShakeAt = now;
+    if(!S.sleeping){
+      const wasDizzy = now < dizzyUntil;
+      dizzyUntil = now + 7000;
+      if(!wasDizzy){ say("dizzy"); log("you shook the phone — Nyx is dizzy", "nyx"); }
+    }
+  }
+}
+$("motionBtn").addEventListener("click", async ()=>{
+  try{
+    if(typeof DeviceMotionEvent !== "undefined" &&
+       typeof DeviceMotionEvent.requestPermission === "function"){
+      const res = await DeviceMotionEvent.requestPermission();
+      if(res !== "granted"){ $("chipShake").innerHTML = "shake <b>denied</b>"; return; }
+    }
+    window.addEventListener("devicemotion", onMotion);
+    $("chipShake").innerHTML = "shake <b>armed</b>";
+    $("chipShake").classList.add("live");
+    $("motionBtn").textContent = "SHAKE ON";
+    $("motionBtn").disabled = true;
+    log("shake sensor armed — go ahead, rattle him (gently)", "you");
+  }catch(e){
+    $("chipShake").innerHTML = "shake <b>unavailable</b>";
+  }
+});
+/* desktop convenience: pressing S also rattles him */
+window.addEventListener("keydown", e=>{
+  if(e.key.toLowerCase() === "s" && !playing){
+    dizzyUntil = Date.now() + 7000;
+    say("dizzy");
+  }
+});
+
+/* ---------- weather: Open-Meteo, Dundalk MD (no key) ---------- */
+async function fetchWeather(){
+  try{
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=39.2627&longitude=-76.5207" +
+                "&current=temperature_2m&temperature_unit=fahrenheit";
+    const r = await fetch(url);
+    const j = await r.json();
+    const t = j && j.current && j.current.temperature_2m;
+    if(typeof t === "number"){
+      S.wxTempF = Math.round(t);
+      S.wxAt = Date.now();
+      $("chipWx").innerHTML = "weather <b>" + S.wxTempF + "°F</b>";
+      $("chipWx").classList.add("live");
+      save();
+    }
+  }catch(e){
+    $("chipWx").innerHTML = "weather <b>offline</b>";
+  }
+}
+
+/* ---------- main loop ---------- */
+let tickN = 0;
+function loop(){
+  frame++;
+  applyElapsed();
+  const m = computeMood();
+  if(m !== S.mood){
+    S.mood = m;
+    refresh();
+    if(m === "hungry" && Math.random() < .5) say("hungry");
+    if(m === "cold") say("cold");
+    if(m === "hot") say("hot");
+    if(m === "sleepy" && !S.sleeping && Math.random() < .4) say("sleepy");
+  }
+  drawSprite();
+  if(tickN % 30 === 0) refresh();
+  if(tickN % 300 === 0) save();
+  tickN++;
+  requestAnimationFrame(loop);
+}
+
+/* ---------- init ---------- */
+(function init(){
+  const existing = load();
+  if(existing){
+    S = existing;
+    const awayMin = Math.floor((Date.now() - (S.lastSeen||Date.now()))/60000);
+    applyElapsed();
+    refresh();
+    loop();
+    fetchWeather();
+    setInterval(fetchWeather, 15*60*1000);
+    if(S.sleeping){
+      log("Nyx is still napping where you left him", "nyx");
+    } else if(awayMin >= 240){
+      setTimeout(()=>say("greet_long"), 700);
+    } else {
+      const hr = new Date().getHours();
+      setTimeout(()=>say(hr < 11 ? "greet_morning" : "greet_day"), 700);
+    }
+    if(S.hunger <= 15) setTimeout(()=>say("hungry"), 4200);
+  } else {
+    S = freshState();
+    save();
+    refresh();
+    loop();
+    fetchWeather();
+    setInterval(fetchWeather, 15*60*1000);
+    $("hatchText").textContent =
+      "Something small and pixelated crawls out of the static. He has horns, opinions, " +
+      "and a " + trait().label + " streak. His name is Nyx.";
+    $("hatch").classList.add("on");
+    $("hatchBtn").addEventListener("click", ()=>{
+      $("hatch").classList.remove("on");
+      setMood("happy", 4);
+      say("greet_day");
+      log("Nyx hatched. Trait: " + trait().label, "nyx");
+      save();
+    });
+  }
+  window.addEventListener("beforeunload", ()=>{ S.lastSeen = Date.now(); save(); });
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.hidden){ S.lastSeen = Date.now(); save(); }
+  });
+})();
+</script>
+</body>
+</html>
