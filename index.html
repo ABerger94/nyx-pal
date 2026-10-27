@@ -85,6 +85,28 @@
   }
   #moodTag.warn{background:var(--warn);} #moodTag.bad{background:var(--bad); color:#fff;}
   #playLayer{position:absolute; inset:0; z-index:9; display:none;}
+  /* room props */
+  #rug{position:absolute; left:50%; bottom:6%; transform:translateX(-50%); width:62%; height:11%;
+    background:radial-gradient(ellipse at center, rgba(154,107,255,.35) 0%, rgba(154,107,255,.12) 70%, transparent 72%);
+    border-radius:50%; z-index:2; pointer-events:none;}
+  #windowProp{position:absolute; right:7%; top:9%; width:19%; height:24%; z-index:1; pointer-events:none;
+    border:3px solid #2e2e55; border-radius:6px; background:linear-gradient(180deg,#2a3a6e,#141433);}
+  #stage.night #windowProp{background:linear-gradient(180deg,#0a0a26,#1a1440);}
+  #windowGlow{position:absolute; inset:0; background:radial-gradient(circle at 70% 30%, rgba(255,240,180,.85), transparent 55%);}
+  #stage.night #windowGlow{background:radial-gradient(circle at 70% 30%, rgba(200,215,255,.7), transparent 55%);}
+  #propLamp{position:absolute; left:6%; bottom:24%; z-index:3; font-size:26px; color:#ffd166;
+    text-shadow:0 0 14px rgba(255,209,102,.9), 0 0 30px rgba(255,209,102,.5); display:none; pointer-events:none;}
+  #propLamp.on{display:block;}
+  .mcard{position:absolute; width:52px; height:68px; font-size:26px; background:var(--panel2); color:var(--txt);
+    border:3px solid var(--teal-dim); border-radius:8px; box-shadow:0 4px 0 #0a0a18; padding:0;}
+  .mcard.flipped{background:#ffd166; color:#22223a;}
+  .mcard.matched{background:var(--good); color:#0b2b14; border-color:#2e7d46;}
+  #reactTarget{position:absolute; left:50%; top:38%; transform:translate(-50%,-50%); width:110px; height:110px;
+    border-radius:50%; background:#3a3a5e; color:#d8f7ef; font-size:13px; border:4px solid #2e2e55; padding:0;}
+  #reactTarget.gold{background:#ffd166; color:#22223a; border-color:#fff2b0;
+    box-shadow:0 0 34px rgba(255,209,102,.95);}
+  #shelf{margin-top:10px; font-size:18px; color:#a9a9d6; border-top:1px dashed rgba(255,255,255,.12); padding-top:8px;}
+  #shelf b{color:var(--warn); font-weight:normal;}
   #playLayer.on{display:block;}
   .bit{position:absolute; width:26px; height:26px; image-rendering:pixelated; cursor:pointer;}
   .panel{width:100%; max-width:460px; background:var(--panel); border:3px solid var(--line);
@@ -141,6 +163,9 @@
   <div id="stage" title="Tap to pet Nyx">
     <div id="stars"></div>
     <div id="floor"></div>
+    <div id="windowProp"><div id="windowGlow"></div></div>
+    <div id="rug"></div>
+    <div id="propLamp">&#9733;</div>
     <div id="moodTag">content</div>
     <div id="bubble"></div>
     <canvas id="nyxCanvas" width="288" height="252"></canvas>
@@ -160,6 +185,16 @@
     <button id="sleepBtn" class="alt">NAP</button>
     <button id="callBtn" class="ghost">CALL</button>
   </div>
+  <div class="actions" style="grid-template-columns:repeat(3,1fr);">
+    <button id="matchBtn" class="alt">MATCH</button>
+    <button id="reactBtn" class="alt">REACT</button>
+    <button id="shopBtn" class="ghost">SHOP</button>
+  </div>
+  <div id="shopRow" style="display:none; grid-template-columns:repeat(3,1fr); gap:9px; margin-top:9px;">
+    <button data-shop="crown">TINY CROWN 30c</button>
+    <button data-shop="feast">STAR FEAST 15c</button>
+    <button data-shop="lamp">STAR LAMP 25c</button>
+  </div>
   <div id="foodRow">
     <button data-food="berry">PIXEL BERRY</button>
     <button data-food="burger">BYTE BURGER</button>
@@ -175,7 +210,10 @@
     <span class="chip" id="chipShake">shake <b>off</b></span>
     <span class="chip" id="chipWx">weather <b>…</b></span>
     <span class="chip" id="chipAge">age <b>0m</b></span>
+    <span class="chip" id="chipCoins">coins <b>0</b></span>
+    <span class="chip" id="chipStage">stage <b>baby</b></span>
   </div>
+  <div id="shelf">collection: <b>empty</b></div>
   <div class="rowBtns">
     <button id="earsBtn" class="ghost">ENABLE EARS</button>
     <button id="motionBtn" class="ghost">ENABLE SHAKE</button>
@@ -228,17 +266,17 @@ const BODY = [
 "....H........H....",
 "...HHH......HHH...",
 "...HHHH....HHHH...",
-"....TTTTTTTTTT....",
-"...TTTTTTTTTTTT...",
-"..TTTTTTTTTTTTTT..",
-"..PTTTTTTTTTTTTP..",
-"..PTTTTTTTTTTTTP..",
-"...TTTTTTTTTTTT...",
-"...TtTTTTTTTtT....",
-"....TTTTTTTTTT....",
+"....TTtTTTTTtT....",
+"...TTTTTTTTTtt....",
+"..TTTTTTTTTTTtT...",
+"..PTTTTTTTTTTtTP..",
+"..PTtTTTTTTTtTtP..",
+"...TTTTTTTTTt.....",
+"...TtTTTTTTtTt....",
+"....TTTTTTTtt.....",
 ".....Tt....tT.....",
 "....TTT....TTT....",
-"...TTTT....TTTT...",
+"...TTtt....ttTT...",
 "..PPPP......PPPP.."
 ];
 const PX = 16; /* pixel size on canvas: canvas 288x252, sprite 18*16=288 wide */
@@ -274,7 +312,8 @@ function freshState(){
     trait: trait.id,
     mood: "content", moodUntil: 0,
     sleeping: false, interacted: 0,
-    wxTempF: null, wxAt: 0
+    wxTempF: null, wxAt: 0,
+    coins: 0, owned: [], hat: null, lastInteract: Date.now()
   };
 }
 function load(){
@@ -283,11 +322,27 @@ function load(){
     if(!raw) return null;
     const s = JSON.parse(raw);
     if(!s || typeof s.hunger !== "number") return null;
+    /* v1 -> v2 migration: fill defaults for fields a v1 save lacks */
+    if(typeof s.coins !== "number") s.coins = 0;
+    if(!Array.isArray(s.owned)) s.owned = [];
+    if(!("hat" in s)) s.hat = null;
+    if(typeof s.lastInteract !== "number") s.lastInteract = s.lastSeen || Date.now();
     return s;
   }catch(e){ return null; }
 }
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
 function trait(){ return TRAITS.find(t=>t.id===S.trait) || TRAITS[0]; }
+
+/* ---------- growth stages ---------- */
+function stageOf(){
+  const days = (Date.now() - S.born) / 86400000;
+  if(days < 1) return "baby";
+  if(days < 3) return "kid";
+  if(days < 7) return "teen";
+  return "adult";
+}
+const STAGE_SCALE = {baby:0.8, kid:0.92, teen:1.0, adult:1.05};
+const ITEM_NAMES = {crown:"Tiny Crown", lamp:"Star Lamp", feast:"Star Feast"};
 
 /* real-time decay applied from elapsed wall-clock time, online and offline */
 function applyElapsed(){
@@ -302,7 +357,10 @@ function applyElapsed(){
   }else{
     /* tuned so a full tank lasts roughly a day of real time */
     S.hunger = clamp(S.hunger - mins*0.07*trait().hungerRate, 0, 100);
-    S.energy = clamp(S.energy - mins*0.055, 0, 100);
+    /* sleep schedule: energy drains faster late at night (23:00-06:00) */
+    const hrN = new Date().getHours();
+    const nightBoost = (hrN >= 23 || hrN < 6) && trait().id !== "nightowl" ? 1.8 : 1.0;
+    S.energy = clamp(S.energy - mins*0.055*nightBoost, 0, 100);
   }
   S.lastSeen = now;
 }
@@ -310,6 +368,20 @@ function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
 /* ---------- rendering ---------- */
 let blinkUntil = 0, nextBlink = Date.now()+1800, frame = 0;
+/* idle walk state machine: wanders, pauses, turns */
+let walkX = 0, walkDir = 1, walkMode = "idle", walkNextAt = Date.now()+2500, walkEndsAt = 0;
+function updateWalk(now){
+  if(S.sleeping || playing){ walkMode = "idle"; return; }
+  if(walkMode === "idle" && now >= walkNextAt){
+    walkMode = "walk"; walkDir = Math.random() < .5 ? -1 : 1;
+    walkEndsAt = now + 1200 + Math.random()*1800;
+  } else if(walkMode === "walk"){
+    walkX += walkDir * 0.8;
+    if(walkX > 64){ walkX = 64; walkDir = -1; }
+    if(walkX < -64){ walkX = -64; walkDir = 1; }
+    if(now >= walkEndsAt){ walkMode = "idle"; walkNextAt = now + 2000 + Math.random()*4000; }
+  }
+}
 function drawSprite(){
   const now = Date.now();
   if(now > nextBlink){ blinkUntil = now+140; nextBlink = now + 1600 + Math.random()*2600; }
@@ -324,7 +396,14 @@ function drawSprite(){
   if(S.mood === "happy"){ oy -= Math.abs(Math.round(Math.sin(now/180)*3)); }
 
   ctx.save();
-  ctx.translate(ox, oy*2);
+  ctx.translate(ox + walkX, oy*2);
+  /* growth-stage scale, applied around the sprite's base */
+  const sc = STAGE_SCALE[stageOf()] || 1;
+  if(sc !== 1 && typeof ctx.scale === "function"){
+    ctx.translate(canvas.width/2, canvas.height);
+    ctx.scale(sc, sc);
+    ctx.translate(-canvas.width/2, -canvas.height);
+  }
   /* body */
   for(let r=0;r<BODY.length;r++){
     const row = BODY[r];
@@ -335,9 +414,22 @@ function drawSprite(){
       ctx.fillRect(c*PX, r*PX, PX, PX);
     }
   }
-  /* belly spark */
+  /* belly pattern: little gold diamond */
   ctx.fillStyle = PAL.G;
-  ctx.fillRect(8*PX, 10*PX, PX, PX); ctx.fillRect(9*PX, 10*PX, PX, PX);
+  ctx.fillRect(8*PX, 9*PX, PX, PX); ctx.fillRect(9*PX, 10*PX, PX, PX);
+  ctx.fillRect(8*PX, 11*PX, PX, PX); ctx.fillRect(7*PX, 10*PX, PX, PX);
+  /* ear tufts */
+  ctx.fillStyle = PAL.H;
+  ctx.fillRect(3*PX, 1*PX, PX, PX); ctx.fillRect(14*PX, 1*PX, PX, PX);
+  /* wearable hat: tiny crown, drawn between the horns */
+  if(S.hat === "crown"){
+    ctx.fillStyle = PAL.G;
+    ctx.fillRect(7*PX, 1*PX, PX, PX); ctx.fillRect(9*PX, 1*PX, PX, PX);
+    ctx.fillRect(10*PX, 1*PX, PX, PX);
+    ctx.fillRect(7*PX, 2*PX, 4*PX, PX);
+    ctx.fillStyle = PAL.R;
+    ctx.fillRect(8*PX, 2*PX, PX, PX);
+  }
   /* tail (right side, wags when happy) */
   const wag = S.mood==="happy" ? (frame%2===0?0:1) : 0;
   ctx.fillStyle = PAL.P;
@@ -440,8 +532,36 @@ const LINES = {
   mad:["hmph. >:(","i am small but my grudge is rendered in 4K.","apology snacks will be considered."],
   fed:["*cronch* …acceptance. i accept this offering.","that hit the empty pixel in my chest.","food: acquired. mood: repaired."],
   play:["catch mode: ON. try to keep up.","i am faster than i look. i look slow. still.","again! again! my tail is wagging on its own!"],
-  wake:["i have returned from the rectangle dimension.","nap complete. i am 200% more powerful.","did i miss anything? did snacks happen?"]
+  wake:["i have returned from the rectangle dimension.","nap complete. i am 200% more powerful.","did i miss anything? did snacks happen?"],
+  mutter:["i counted 12 dust pixels today. a record.","if i stare at the wall long enough it stares back. rude.","somewhere out there is a snack with my name on it.","note to self: be even smaller tomorrow."],
+  trait_snackdriven:["i wasn't staring at the snack shelf. i was guarding it.","hypothetically… second lunch?"],
+  trait_nightowl:["the moon gets me. you wouldn't understand.","daytime is just night with the lights broken."],
+  trait_gremlin:["i hid your left sock in another dimension. no regrets.","chaos is a love language."],
+  trait_sleepyhead:["i could nap anywhere. here. now. watch me.","being awake is a part-time job and i am not committed."],
+  trait_clingy:["just checking you're still there. okay. good.","i like this. us. in the same app."]
 };
+function sayText(text){
+  const b = $("bubble");
+  b.textContent = text;
+  b.classList.add("show");
+  clearTimeout(say._t);
+  say._t = setTimeout(()=>b.classList.remove("show"), 3400);
+  log(text, "nyx");
+}
+let lastInteractAt = Date.now(), nextMutterAt = Date.now() + 6000;
+function noteInteract(){
+  lastInteractAt = Date.now();
+  S.lastInteract = lastInteractAt;
+  if(nextMutterAt < lastInteractAt + 6000) nextMutterAt = lastInteractAt + 6000;
+}
+function mutter(){
+  if(S.hunger <= 30){ say("hungry"); return; }
+  if(S.bond <= 25 || trait().id === "clingy" && Math.random() < .5){
+    say(Math.random() < .5 ? "trait_clingy" : "greet_long"); return;
+  }
+  const tk = "trait_" + trait().id;
+  say(LINES[tk] && Math.random() < .55 ? tk : "mutter");
+}
 function say(kind){
   const arr = LINES[kind] || LINES.content;
   const text = arr[Math.floor(Math.random()*arr.length)];
@@ -478,7 +598,11 @@ function computeMood(){
   if(S.energy <= 16) return "sleepy";
   const hr = new Date().getHours();
   if(trait().id === "nightowl" && hr >= 1 && hr < 5 && S.energy < 55) return "content";
-  if(hr >= 23 || hr < 5){ if(S.energy < 45) return "sleepy"; }
+  if(hr >= 23 || hr < 6){
+    /* sleep schedule: he gets sleepy much earlier at night */
+    if(trait().id === "nightowl"){ if(S.energy < 25) return "sleepy"; }
+    else if(S.energy < 60) return "sleepy";
+  }
   return "content";
 }
 function setMood(m, seconds){
@@ -499,6 +623,12 @@ function refresh(){
   tag.id = "moodTag";
   $("chipMood").innerHTML = "mood <b>" + (S.sleeping ? "napping" : S.mood) + "</b>";
   $("chipTrait").innerHTML = "trait <b>" + trait().label + "</b>";
+  $("chipCoins").innerHTML = "coins <b>" + Math.floor(S.coins) + "</b>";
+  $("chipStage").innerHTML = "stage <b>" + stageOf() + "</b>";
+  $("propLamp").classList.toggle("on", S.owned.includes("lamp"));
+  $("shelf").innerHTML = "collection: " + (S.owned.length
+    ? S.owned.map(id=>"<b>"+(ITEM_NAMES[id]||id)+"</b>").join(", ")
+    : "<b>empty</b>");
   const ageMin = Math.floor((Date.now()-S.born)/60000);
   $("chipAge").innerHTML = "age <b>" + (ageMin < 60 ? ageMin+"m" :
     ageMin < 1440 ? Math.floor(ageMin/60)+"h "+(ageMin%60)+"m" :
@@ -516,6 +646,7 @@ function bumpBond(n){ S.bond = clamp(S.bond + n*trait().bondRate, 0, 100); }
 stage.addEventListener("click", ()=>{
   if(playing) return;
   if(S.sleeping){ wakeUp(); return; }
+  noteInteract();
   S.interacted++;
   bumpBond(1.2);
   const love = Math.random() < 0.3;
@@ -536,6 +667,7 @@ $("foodRow").addEventListener("click", e=>{
   const btn = e.target.closest("button[data-food]");
   if(!btn) return;
   const f = FOODS[btn.dataset.food];
+  noteInteract();
   if(S.sleeping) wakeUp(true);
   S.hunger = clamp(S.hunger + f.hunger, 0, 100);
   S.energy = clamp(S.energy + f.energy, 0, 100);
@@ -548,6 +680,7 @@ $("foodRow").addEventListener("click", e=>{
   save();
 });
 $("callBtn").addEventListener("click", ()=>{
+  noteInteract();
   if(S.sleeping){ wakeUp(); return; }
   setMood("happy", 3);
   say(Math.random()<.5 ? "greet_day" : "content");
@@ -575,10 +708,13 @@ $("playBtn").addEventListener("click", ()=>{
   if(playing) return;
   if(S.sleeping) wakeUp(true);
   if(S.energy < 8){ setMood("sleepy",4); say("sleepy"); return; }
+  noteInteract();
   playing = true; playScore = 0;
   playEndsAt = Date.now() + 20000;
   $("playLayer").classList.add("on");
   $("playBtn").disabled = true;
+  $("matchBtn").disabled = true;
+  $("reactBtn").disabled = true;
   say("play");
   log("started Catch the Bit", "you");
   spawnBit();
@@ -610,9 +746,13 @@ function spawnBit(){
 function endPlay(){
   playing = false;
   clearInterval(bitTimer);
+  const earned = playScore * 2;
+  if(earned > 0){ S.coins += earned; log("earned " + earned + " coins", "nyx"); }
   $("playLayer").classList.remove("on");
   $("playLayer").innerHTML = "";
   $("playBtn").disabled = false;
+  $("matchBtn").disabled = false;
+  $("reactBtn").disabled = false;
   S.energy = clamp(S.energy - 9, 0, 100);
   S.hunger = clamp(S.hunger - 4, 0, 100);
   bumpBond(2 + playScore*0.15);
@@ -621,6 +761,180 @@ function endPlay(){
   say(playScore >= 8 ? "happy" : "content");
   save();
 }
+
+/* ---------- shared game plumbing ---------- */
+function setGameButtons(dis){
+  $("playBtn").disabled = dis; $("matchBtn").disabled = dis; $("reactBtn").disabled = dis;
+}
+function cleanupGame(){
+  playing = false;
+  $("playLayer").classList.remove("on");
+  $("playLayer").innerHTML = "";
+  setGameButtons(false);
+}
+
+/* ---------- play: Memory Match (30 seconds) ---------- */
+let matchEndsAt = 0, matchTimer = null, matchFirst = null, matchLock = false, matchDone = false;
+$("matchBtn").addEventListener("click", ()=>{
+  if(playing) return;
+  if(S.sleeping) wakeUp(true);
+  if(S.energy < 8){ setMood("sleepy",4); say("sleepy"); return; }
+  noteInteract();
+  playing = true; matchDone = false; matchFirst = null; matchLock = false;
+  matchEndsAt = Date.now() + 30000;
+  const layer = $("playLayer");
+  layer.innerHTML = "";
+  layer.classList.add("on");
+  setGameButtons(true);
+  log("started Memory Match", "you");
+  say("play");
+  /* 4-card row: one matching pair + two singles, shuffled */
+  const glyphs = ["\u2605", "\u2665", "\u2605", "\u25C6"];
+  for(let i = glyphs.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = glyphs[i]; glyphs[i] = glyphs[j]; glyphs[j] = t;
+  }
+  glyphs.forEach((g, i)=>{
+    const card = document.createElement("button");
+    card.className = "mcard";
+    card.dataset.glyph = g;
+    card.textContent = "?";
+    card.style.left = (8 + i * 24) + "%";
+    card.style.top = "36%";
+    card.addEventListener("click", ev=>{
+      ev.stopPropagation();
+      if(matchLock || card.classList.contains("flipped") || matchDone) return;
+      card.classList.add("flipped");
+      card.textContent = g;
+      if(!matchFirst){ matchFirst = card; return; }
+      if(matchFirst.dataset.glyph === g){
+        card.classList.add("matched"); matchFirst.classList.add("matched");
+        matchFirst = null;
+        matchDone = true;
+        setTimeout(()=>endMatch(true), 450);
+      } else {
+        matchLock = true;
+        const a = matchFirst; matchFirst = null;
+        setTimeout(()=>{
+          a.classList.remove("flipped"); a.textContent = "?";
+          card.classList.remove("flipped"); card.textContent = "?";
+          matchLock = false;
+        }, 650);
+      }
+    });
+    layer.appendChild(card);
+  });
+  matchTimer = setInterval(()=>{
+    if(Date.now() > matchEndsAt) endMatch(false);
+  }, 250);
+});
+function endMatch(won){
+  if(!playing) return;
+  clearInterval(matchTimer);
+  const earned = won ? 20 : 3;
+  S.coins += earned;
+  S.energy = clamp(S.energy - 6, 0, 100);
+  bumpBond(won ? 3 : 1);
+  log("Memory Match: " + (won ? "won" : "time up") + " (+" + earned + " coins)", "nyx");
+  setMood(won ? "happy" : "content", 5);
+  say(won ? "happy" : "content");
+  cleanupGame();
+  refresh();
+  save();
+}
+
+/* ---------- play: Reaction Flash (5 rounds) ---------- */
+let reactTimer = null, reactRound = 0, reactHits = 0, reactState = "wait", reactGoldAt = 0;
+$("reactBtn").addEventListener("click", ()=>{
+  if(playing) return;
+  if(S.sleeping) wakeUp(true);
+  if(S.energy < 8){ setMood("sleepy",4); say("sleepy"); return; }
+  noteInteract();
+  playing = true; reactRound = 0; reactHits = 0;
+  const layer = $("playLayer");
+  layer.innerHTML = "";
+  layer.classList.add("on");
+  setGameButtons(true);
+  log("started Reaction Flash", "you");
+  say("play");
+  const target = document.createElement("button");
+  target.id = "reactTarget";
+  target.textContent = "WAIT...";
+  layer.appendChild(target);
+  target.addEventListener("click", ev=>{
+    ev.stopPropagation();
+    if(reactState === "gold"){
+      reactHits++;
+      spawnFloaty("+1", "note", 50);
+      nextReactRound();
+    } else if(reactState === "wait"){
+      log("too soon! that was a miss", "nyx");
+      nextReactRound();
+    }
+  });
+  nextReactRound();
+});
+function nextReactRound(){
+  reactRound++;
+  if(reactRound > 5){ endReact(); return; }
+  reactState = "wait";
+  const t = $("reactTarget");
+  if(!t){ endReact(); return; }
+  t.classList.remove("gold");
+  t.textContent = "WAIT...";
+  clearTimeout(reactTimer);
+  reactTimer = setTimeout(()=>{
+    reactState = "gold"; reactGoldAt = Date.now();
+    const tt = $("reactTarget");
+    if(tt){ tt.classList.add("gold"); tt.textContent = "TAP!"; }
+    reactTimer = setTimeout(()=>{ if(reactState === "gold") nextReactRound(); }, 1100);
+  }, 600 + Math.random() * 700);
+}
+function endReact(){
+  clearTimeout(reactTimer);
+  const earned = reactHits * 6;
+  if(earned > 0) S.coins += earned;
+  S.energy = clamp(S.energy - 5, 0, 100);
+  bumpBond(1 + reactHits * 0.4);
+  log("Reaction Flash: hit " + reactHits + "/5 (+" + earned + " coins)", "nyx");
+  setMood(reactHits >= 4 ? "happy" : "content", 5);
+  say(reactHits >= 4 ? "happy" : "content");
+  cleanupGame();
+  refresh();
+  save();
+}
+
+/* ---------- shop ---------- */
+const SHOP = {
+  crown: {price: 30, name: "Tiny Crown"},
+  feast: {price: 15, name: "Star Feast"},
+  lamp:  {price: 25, name: "Star Lamp"}
+};
+$("shopBtn").addEventListener("click", ()=>{
+  const row = $("shopRow");
+  row.style.display = row.style.display === "grid" ? "none" : "grid";
+});
+$("shopRow").addEventListener("click", e=>{
+  const btn = e.target.closest("button[data-shop]");
+  if(!btn) return;
+  const id = btn.dataset.shop, item = SHOP[id];
+  noteInteract();
+  if(id !== "feast" && S.owned.includes(id)){ sayText("already got the " + item.name + ". it's right there."); return; }
+  if(S.coins < item.price){ sayText("not enough coins for the " + item.name + ". play a game, earn some."); log("not enough coins for " + item.name, "nyx"); return; }
+  S.coins -= item.price;
+  if(id === "crown"){ S.owned.push("crown"); S.hat = "crown"; log("bought the Tiny Crown — Nyx wears it now", "you"); sayText("a CROWN. finally, the respect i deserve."); }
+  else if(id === "lamp"){ S.owned.push("lamp"); log("bought the Star Lamp for Nyx's room", "you"); sayText("a lamp shaped like a star. the room is fancy now."); }
+  else { /* feast: premium snack, eaten on the spot */
+    S.hunger = clamp(S.hunger + 45, 0, 100);
+    S.energy = clamp(S.energy + 10, 0, 100);
+    bumpBond(1.5);
+    setMood("love", 4);
+    log("bought a Star Feast — Nyx devoured it", "you");
+    say("fed");
+  }
+  refresh();
+  save();
+});
 
 /* ---------- ears: microphone loudness -> anxious ---------- */
 let earsOn = false, audioCtx = null, loudStreak = 0;
@@ -730,6 +1044,19 @@ let tickN = 0;
 function loop(){
   frame++;
   applyElapsed();
+  updateWalk(Date.now());
+  /* auto-nap: flat out at night with an empty battery */
+  {
+    const hrL = new Date().getHours();
+    if(!S.sleeping && !playing && (hrL >= 23 || hrL < 6) && S.energy <= 5 && trait().id !== "nightowl"){
+      S.sleeping = true; log("Nyx conked out on his own", "nyx"); refresh();
+    }
+  }
+  /* idle muttering: first after ~6s idle, then every 45-90s of quiet */
+  if(!playing && !S.sleeping && Date.now() >= nextMutterAt && Date.now() - lastInteractAt >= 6000){
+    mutter();
+    nextMutterAt = Date.now() + 45000 + Math.random() * 45000;
+  }
   const m = computeMood();
   if(m !== S.mood){
     S.mood = m;
@@ -760,7 +1087,12 @@ function loop(){
     if(S.sleeping){
       log("Nyx is still napping where you left him", "nyx");
     } else if(awayMin >= 240){
-      setTimeout(()=>say("greet_long"), 700);
+      const hrs = Math.round(awayMin / 60);
+      setTimeout(()=>sayText("you were gone " + (awayMin >= 1440 ? Math.round(awayMin/1440) + " day(s)" : hrs + " hour" + (hrs === 1 ? "" : "s")) +
+        ". i noticed. i always notice."), 700);
+    } else if(awayMin >= 60){
+      const hrs = Math.round(awayMin / 60);
+      setTimeout(()=>sayText("back after " + hrs + " hour" + (hrs === 1 ? "" : "s") + "? i kept your spot warm."), 700);
     } else {
       const hr = new Date().getHours();
       setTimeout(()=>say(hr < 11 ? "greet_morning" : "greet_day"), 700);
